@@ -11,7 +11,6 @@ DigiShakti is an advanced space weather monitoring and forecasting platform that
   - Sunspot Numbers
   - ap Index (Planetary Amplitude)
 - **Multi-Source Data Integration**: 
-  - NASA DONKI API
   - NOAA Space Weather data
   - ISRO Aditya-L1 mission data
 - **Interactive Visualizations**: Real-time charts and graphs for space weather parameters
@@ -163,7 +162,18 @@ This project is part of a research initiative for space weather monitoring and f
 
 DigiShakti - Space Weather Research Team
 
+**Team Members:**
+- Dhruv Saini
+- Lily Singhal
+- Garima Avasthi
+
+
+
 ## 📧 Contact
+
+**Dhruv Saini**
+- 📧 Email: [sainidhruv3675@gmail.com](mailto:sainidhruv3675@gmail.com)
+- 🔗 GitHub: [https://github.com/dhruvsaini0001/DigiShakti.git](https://github.com/dhruvsaini0001/DigiShakti.git)
 
 For questions or support, please open an issue on GitHub.
 
@@ -174,7 +184,7 @@ Large data files (.npy, .csv, .cdf) and node_modules are excluded from the repos
 ## 🔄 Updates
 
 The system automatically fetches latest data from:
-- NASA DONKI API (hourly)
+
 - NOAA real-time feeds (every 5 minutes)
 - Aditya-L1 data (as available)
 
