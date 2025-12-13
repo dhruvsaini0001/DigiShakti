@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Node modules
+node_modules/
+**/node_modules/
+
+# Large data files
+*.npy
+*.csv
+*.cdf
+train_data_scaled.csv
+
+# Training data and models
+Cme_detection_Phased2/backend/scripts/7_days_forecast/*.npy
+Cme_detection_Phased2/backend/scripts/7_days_forecast/*.csv
+Cme_detection_Phased2/backend/downloads/*.cdf
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
