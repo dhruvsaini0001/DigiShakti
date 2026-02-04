@@ -166,7 +166,8 @@ DigiShakti - Space Weather Research Team
 - Dhruv Saini
 - Lily Singhal
 - Garima Avasthi
-
+- Akshat Sharma
+- Lakshya Sharma
 
 
 ## 📧 Contact
