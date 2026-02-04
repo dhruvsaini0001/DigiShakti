@@ -237,11 +237,29 @@ class ForecastModelRunner:
                             batch_shape = obj.pop('batch_shape')
                             if batch_shape and len(batch_shape) > 1:
                                 obj['input_shape'] = batch_shape[1:]
-                        for v in obj.values():
-                            fix_config(v)
+                        # Remove ALL dtype-related fields that cause deserialization issues
+                        if 'dtype' in obj:
+                            obj.pop('dtype')
+                        # Also remove any DTypePolicy class references
+                        if 'class_name' in obj and obj.get('class_name') == 'DTypePolicy':
+                            return None
+                        # Recursively fix nested structures
+                        keys_to_remove = []
+                        for k, v in list(obj.items()):
+                            result = fix_config(v)
+                            if result is None:
+                                keys_to_remove.append(k)
+                        for k in keys_to_remove:
+                            obj.pop(k)
                     elif isinstance(obj, list):
-                        for item in obj:
-                            fix_config(item)
+                        items_to_remove = []
+                        for i, item in enumerate(obj):
+                            result = fix_config(item)
+                            if result is None:
+                                items_to_remove.append(i)
+                        for i in reversed(items_to_remove):
+                            obj.pop(i)
+                    return obj
                 
                 fix_config(config)
                 
@@ -410,7 +428,31 @@ class ForecastModelRunner:
             
             with open(self.scaler_path, 'rb') as f:
                 unpickler = NumpyCompatibleUnpickler(f)
-                self.scaler = unpickler.load()
+                loaded_obj = unpickler.load()
+                
+                # Validate scaler type - should be StandardScaler
+                if isinstance(loaded_obj, np.ndarray):
+                    print(f"⚠️  Loaded object is numpy array, not scaler. Creating StandardScaler from saved parameters...")
+                    # The array might contain scaler parameters - try to reconstruct
+                    from sklearn.preprocessing import StandardScaler
+                    self.scaler = StandardScaler()
+                    # If it's a 2D array, try to extract mean and scale
+                    if loaded_obj.ndim == 2 and loaded_obj.shape[0] == 2:
+                        self.scaler.mean_ = loaded_obj[0]
+                        self.scaler.scale_ = loaded_obj[1]
+                        self.scaler.var_ = loaded_obj[1] ** 2
+                        self.scaler.n_features_in_ = len(loaded_obj[0])
+                        self.scaler.n_samples_seen_ = 1
+                        print(f"✓ Reconstructed scaler with {self.scaler.n_features_in_} features")
+                    else:
+                        print(f"❌ Cannot reconstruct scaler from array shape {loaded_obj.shape}")
+                        return False
+                elif hasattr(loaded_obj, 'transform'):
+                    self.scaler = loaded_obj
+                    print(f"✓ Scaler loaded (type: {type(loaded_obj).__name__})")
+                else:
+                    print(f"❌ Loaded object is not a valid scaler: {type(loaded_obj)}")
+                    return False
             
             print(f"✓ Scaler loaded from {self.scaler_path}")
             return True

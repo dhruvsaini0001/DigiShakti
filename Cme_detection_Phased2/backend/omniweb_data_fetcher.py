@@ -1171,16 +1171,26 @@ class OMNIWebDataFetcher:
             pre_content = pre_match.group(1)
             lines = pre_content.split('\n')
             
-            # Find header line
+            # Find header line and detect format type
             header_line_idx = None
+            format_type = None
             for i, line in enumerate(lines):
                 if line.strip().startswith('YEAR') and 'DOY' in line and 'HR' in line:
                     header_line_idx = i
+                    # Detect format based on parameter count in header
+                    if '26' in line or '25' in line:
+                        format_type = 'reduced'  # 26 parameters
+                    else:
+                        format_type = 'full'  # 40 parameters
                     break
             
             if header_line_idx is None:
                 logger.warning("Could not find header line in HTML file")
                 return pd.DataFrame()
+            
+            if format_type is None:
+                logger.warning("Could not detect format type, defaulting to 'reduced'")
+                format_type = 'reduced'
             
             # Parse data lines
             data_lines = []
@@ -1308,7 +1318,25 @@ class OMNIWebDataFetcher:
             df = df.sort_values('timestamp').reset_index(drop=True)
             
             # Filter by date range
-            df = df[(df['timestamp'] >= start_date) & (df['timestamp'] <= end_date)]
+            df_filtered = df[(df['timestamp'] >= start_date) & (df['timestamp'] <= end_date)]
+            
+            # If no data in requested range, use most recent data available
+            if df_filtered.empty and not df.empty:
+                logger.warning(f"⚠️ No data in requested range ({start_date} to {end_date})")
+                logger.info(f"   HTML file contains data from {df['timestamp'].min()} to {df['timestamp'].max()}")
+                logger.info(f"   Using most recent {self.lookback if hasattr(self, 'lookback') else 72} hours of data...")
+                # Get the most recent data (use lookback if available, else 72 hours)
+                lookback_hours = self.lookback if hasattr(self, 'lookback') else 72
+                df_filtered = df.tail(lookback_hours)
+            else:
+                df = df_filtered
+            
+            # If still empty, return empty DataFrame
+            if df_filtered.empty:
+                logger.warning("No data rows found in HTML file after filtering")
+                return pd.DataFrame()
+            
+            df = df_filtered
             
             # Filter to requested parameters if specified
             if parameters:

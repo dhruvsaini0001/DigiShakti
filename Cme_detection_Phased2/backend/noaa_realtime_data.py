@@ -40,7 +40,8 @@ def get_real_solar_wind_data():
             ])
             
             df['timestamp'] = pd.to_datetime(df['time_tag'])
-            for col in ['bx_gsm', 'by_gsm', 'bz_gsm', 'bt']:
+            # Convert all numeric columns to numeric type
+            for col in ['bx_gsm', 'by_gsm', 'bz_gsm', 'bt', 'lon_gsm', 'lat_gsm']:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
             
             logger.info(f"✅ Fetched {len(df)} REAL magnetic data points from NOAA")

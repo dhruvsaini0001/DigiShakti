@@ -731,13 +731,13 @@ const ForecastPredictionsPanel: React.FC = () => {
                   <p className="text-xs text-muted-foreground mt-1">{selectedParam?.unit}</p>
                 </CardContent>
               </Card>
-              <Card className="space-card bg-gradient-to-br from-purple-500/10 to-pink-500/10 border-purple-500/30">
+              {/* <Card className="space-card bg-gradient-to-br from-purple-500/10 to-pink-500/10 border-purple-500/30">
                 <CardContent className="p-4">
                   <p className="text-xs text-muted-foreground mb-1">Std Dev</p>
                   <p className="text-2xl font-bold text-purple-400">{paramStats.std.toFixed(4)}</p>
                   <p className="text-xs text-muted-foreground mt-1">{selectedParam?.unit}</p>
                 </CardContent>
-              </Card>
+              </Card> */}
             </div>
           )}
 
@@ -782,12 +782,12 @@ const ForecastPredictionsPanel: React.FC = () => {
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-xs text-slate-400 mb-1 font-medium" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
+                        {/* <p className="text-xs text-slate-400 mb-1 font-medium" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
                           Model Accuracy
                         </p>
                         <p className="text-sm font-bold text-green-400" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
                           MAE: {paramStats?.mean ? 'Calculated' : 'N/A'}
-                        </p>
+                        </p> */}
                       </div>
                     </div>
                   </div>

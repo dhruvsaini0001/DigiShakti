@@ -22,6 +22,7 @@ import asyncio
 from pathlib import Path
 import tempfile
 import os
+import requests
 
 # Import our CME detection modules
 import sys
@@ -6022,6 +6023,332 @@ async def get_live_geomagnetic_storm():
             'error': str(e),
             'note': 'Geomagnetic data is optional - UI will continue to work without it'
         })
+
+# ============================================================================
+# SATELLITE DATA & FIELD DATA FUTURE PREDICTION ENDPOINTS
+# ============================================================================
+
+@app.get("/api/satellites", tags=["satellites"])
+async def get_satellites_list():
+    """
+    Fetch list of all satellites with their NORAD IDs from external API.
+    """
+    try:
+        url = "https://sat-api-k1ga.onrender.com/api/satellites/"
+        response = requests.get(url, timeout=15)
+        
+        if response.status_code == 200:
+            data = response.json()
+            # Extract NORAD IDs and satellite names if available
+            satellites = []
+            
+            # Handle different response formats
+            if isinstance(data, list):
+                for sat in data:
+                    norad_id = sat.get('norad_id') or sat.get('id') or sat.get('NORAD_ID') or sat.get('noradId')
+                    if norad_id:
+                        satellites.append({
+                            'norad_id': int(norad_id) if isinstance(norad_id, (int, str)) and str(norad_id).isdigit() else norad_id,
+                            'name': sat.get('name') or sat.get('satellite_name') or sat.get('satelliteName') or f"Satellite {norad_id}",
+                            'object_type': sat.get('object_type') or sat.get('objectType') or 'Unknown'
+                        })
+            elif isinstance(data, dict):
+                # Check if data has satellites array
+                if 'satellites' in data:
+                    for sat in data['satellites']:
+                        norad_id = sat.get('norad_id') or sat.get('id') or sat.get('NORAD_ID')
+                        if norad_id:
+                            satellites.append({
+                                'norad_id': int(norad_id) if isinstance(norad_id, (int, str)) and str(norad_id).isdigit() else norad_id,
+                                'name': sat.get('name') or f"Satellite {norad_id}",
+                                'object_type': sat.get('object_type') or 'Unknown'
+                            })
+                # If data itself is a satellite object
+                elif 'norad_id' in data or 'id' in data:
+                    norad_id = data.get('norad_id') or data.get('id')
+                    satellites.append({
+                        'norad_id': int(norad_id) if isinstance(norad_id, (int, str)) and str(norad_id).isdigit() else norad_id,
+                        'name': data.get('name') or f"Satellite {norad_id}",
+                        'object_type': data.get('object_type') or 'Unknown'
+                    })
+            
+            if not satellites:
+                logger.warning(f"Satellite API returned data but no satellites found. Response: {data}")
+                return {
+                    'success': False,
+                    'satellites': [],
+                    'count': 0,
+                    'error': 'No satellites found in API response',
+                    'raw_data': data
+                }
+            
+            return {
+                'success': True,
+                'satellites': satellites,
+                'count': len(satellites)
+            }
+        else:
+            logger.error(f"Satellite API returned status {response.status_code}: {response.text}")
+            return {
+                'success': False,
+                'satellites': [],
+                'count': 0,
+                'error': f"Satellite API returned status {response.status_code}",
+                'status_code': response.status_code
+            }
+            
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error fetching satellites: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching satellites: {str(e)}")
+    except Exception as e:
+        logger.error(f"Unexpected error in get_satellites_list: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/satellites/{norad_id}")
+async def get_satellite_details(norad_id: int):
+    """
+    Fetch detailed information for a specific satellite by NORAD ID.
+    """
+    try:
+        url = f"https://sat-api-k1ga.onrender.com/api/satellites/{norad_id}"
+        response = requests.get(url, timeout=10)
+        
+        if response.status_code == 200:
+            data = response.json()
+            
+            # Extract relevant satellite parameters
+            satellite_info = {
+                'norad_id': norad_id,
+                'name': data.get('name') or data.get('satellite_name') or f"Satellite {norad_id}",
+                'latitude': data.get('latitude') or data.get('lat'),
+                'longitude': data.get('longitude') or data.get('lon') or data.get('long'),
+                'altitude_km': data.get('altitude_km') or data.get('altitude') or data.get('alt'),
+                'velocity_km_s': data.get('velocity_km_s') or data.get('velocity') or data.get('vel'),
+                'inclination': data.get('inclination') or data.get('inc'),
+                'eccentricity': data.get('eccentricity') or data.get('ecc'),
+                'period_minutes': data.get('period_minutes') or data.get('period'),
+                'object_type': data.get('object_type', 'Unknown'),
+                'raw_data': data  # Include all raw data for reference
+            }
+            
+            return {
+                'success': True,
+                'satellite': satellite_info
+            }
+        elif response.status_code == 404:
+            raise HTTPException(status_code=404, detail=f"Satellite with NORAD ID {norad_id} not found")
+        else:
+            logger.error(f"Satellite API returned status {response.status_code}")
+            raise HTTPException(status_code=response.status_code, detail="Failed to fetch satellite details")
+            
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error fetching satellite details: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching satellite details: {str(e)}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in get_satellite_details: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/satellites/{norad_id}/cme-prediction")
+async def get_satellite_cme_prediction(norad_id: int, threshold: float = 0.5):
+    """
+    Match satellite coordinates with NOAA wind data and calculate CME occurrence probability.
+    
+    Parameters:
+    - norad_id: NORAD ID of the satellite
+    - threshold: Probability threshold for CME detection (default: 0.5)
+    """
+    try:
+        # Fetch satellite details
+        sat_url = f"https://sat-api-k1ga.onrender.com/api/satellites/{norad_id}"
+        sat_response = requests.get(sat_url, timeout=10)
+        
+        if sat_response.status_code != 200:
+            raise HTTPException(status_code=404, detail=f"Satellite with NORAD ID {norad_id} not found")
+        
+        sat_data = sat_response.json()
+        sat_lat = sat_data.get('latitude') or sat_data.get('lat')
+        sat_lon = sat_data.get('longitude') or sat_data.get('lon') or sat_data.get('long')
+        
+        if sat_lat is None or sat_lon is None:
+            return {
+                'success': False,
+                'error': 'Satellite coordinates (latitude/longitude) not available',
+                'satellite': {
+                    'norad_id': norad_id,
+                    'name': sat_data.get('name', f'Satellite {norad_id}')
+                }
+            }
+        
+        # Fetch NOAA wind data
+        try:
+            from noaa_realtime_data import get_combined_realtime_data
+            noaa_result = get_combined_realtime_data()
+            
+            if not noaa_result.get('success') or 'data' not in noaa_result:
+                raise Exception("NOAA data not available")
+            
+            noaa_df = noaa_result['data'].copy()
+            
+            # Check if we have lat/lon columns
+            if 'lat_gsm' not in noaa_df.columns or 'lon_gsm' not in noaa_df.columns:
+                raise Exception("NOAA data missing latitude/longitude columns")
+            
+            # Convert lat/lon columns to numeric (they might be strings from JSON)
+            noaa_df['lat_gsm'] = pd.to_numeric(noaa_df['lat_gsm'], errors='coerce')
+            noaa_df['lon_gsm'] = pd.to_numeric(noaa_df['lon_gsm'], errors='coerce')
+            
+            # Convert satellite coordinates to float
+            sat_lat = float(sat_lat) if sat_lat is not None else None
+            sat_lon = float(sat_lon) if sat_lon is not None else None
+            
+            # Remove rows with NaN lat/lon values
+            noaa_df = noaa_df.dropna(subset=['lat_gsm', 'lon_gsm'])
+            
+            if noaa_df.empty:
+                raise Exception("NOAA data has no valid latitude/longitude values")
+            
+            # Find matching coordinates (within tolerance)
+            tolerance = 5.0  # degrees tolerance for matching
+            noaa_df['lat_diff'] = abs(noaa_df['lat_gsm'] - sat_lat)
+            noaa_df['lon_diff'] = abs(noaa_df['lon_gsm'] - sat_lon)
+            noaa_df['distance'] = np.sqrt(noaa_df['lat_diff']**2 + noaa_df['lon_diff']**2)
+            
+            # Find closest match
+            closest_match = noaa_df.loc[noaa_df['distance'].idxmin()]
+            match_distance = closest_match['distance']
+            
+            if match_distance > tolerance:
+                return {
+                    'success': False,
+                    'error': f'No matching NOAA wind data found within {tolerance} degrees',
+                    'message': 'No CME probability available for this satellite location',
+                    'satellite': {
+                        'norad_id': norad_id,
+                        'latitude': sat_lat,
+                        'longitude': sat_lon,
+                        'name': sat_data.get('name', f'Satellite {norad_id}')
+                    },
+                    'closest_match_distance': float(match_distance),
+                    'cme_analysis': {
+                        'probability': 0.0,
+                        'occurring': False,
+                        'risk_level': 'N/A',
+                        'message': 'No CME probability - satellite location does not match any NOAA wind data coordinates'
+                    }
+                }
+            
+            # Extract wind parameters from matched data and convert to numeric
+            wind_speed_val = closest_match.get('speed') or closest_match.get('velocity') or 0
+            wind_density_val = closest_match.get('density') or 0
+            wind_temperature_val = closest_match.get('temperature') or 0
+            bz_gsm_val = closest_match.get('bz_gsm') or 0
+            bt_val = closest_match.get('bt') or 0
+            
+            # Convert to numeric (handle string values)
+            wind_speed = pd.to_numeric(wind_speed_val, errors='coerce')
+            wind_density = pd.to_numeric(wind_density_val, errors='coerce')
+            wind_temperature = pd.to_numeric(wind_temperature_val, errors='coerce')
+            bz_gsm = pd.to_numeric(bz_gsm_val, errors='coerce')
+            bt = pd.to_numeric(bt_val, errors='coerce')
+            
+            # Handle NaN values - convert to float with defaults
+            wind_speed = float(wind_speed) if pd.notna(wind_speed) else 0.0
+            wind_density = float(wind_density) if pd.notna(wind_density) else 0.0
+            wind_temperature = float(wind_temperature) if pd.notna(wind_temperature) else 0.0
+            bz_gsm = float(bz_gsm) if pd.notna(bz_gsm) else 0.0
+            bt = float(bt) if pd.notna(bt) else 0.0
+            
+            # Calculate CME probability based on thresholds
+            # Using similar logic to the CME detection system
+            velocity_threshold = 500.0  # km/s
+            density_threshold = 10.0  # particles/cm³
+            temperature_threshold = 150000.0  # K
+            bz_threshold = -10.0  # nT (negative Bz indicates southward field)
+            
+            # Calculate individual scores
+            velocity_score = min(1.0, max(0.0, (wind_speed - 300) / (velocity_threshold - 300))) if wind_speed > 300 else 0.0
+            density_score = min(1.0, max(0.0, (wind_density - 5) / (density_threshold - 5))) if wind_density > 5 else 0.0
+            temperature_score = min(1.0, max(0.0, (wind_temperature - 100000) / (temperature_threshold - 100000))) if wind_temperature > 100000 else 0.0
+            bz_score = min(1.0, max(0.0, abs(bz_gsm) / abs(bz_threshold))) if bz_gsm < 0 else 0.0
+            
+            # Combined probability (weighted average)
+            cme_probability = (
+                velocity_score * 0.3 +
+                density_score * 0.25 +
+                temperature_score * 0.25 +
+                bz_score * 0.2
+            )
+            
+            # Determine CME status
+            cme_occurring = cme_probability >= threshold
+            risk_level = 'HIGH' if cme_probability >= 0.7 else 'MEDIUM' if cme_probability >= 0.4 else 'LOW'
+            
+            return {
+                'success': True,
+                'satellite': {
+                    'norad_id': norad_id,
+                    'name': sat_data.get('name', f'Satellite {norad_id}'),
+                    'latitude': sat_lat,
+                    'longitude': sat_lon,
+                    'altitude_km': sat_data.get('altitude_km') or sat_data.get('altitude'),
+                    'velocity_km_s': sat_data.get('velocity_km_s') or sat_data.get('velocity')
+                },
+                'noaa_match': {
+                    'latitude': float(closest_match['lat_gsm']),
+                    'longitude': float(closest_match['lon_gsm']),
+                    'match_distance_degrees': float(match_distance),
+                    'timestamp': str(closest_match.get('timestamp', closest_match.get('time_tag', datetime.now().isoformat())))
+                },
+                'wind_parameters': {
+                    'speed_km_s': float(wind_speed) if pd.notna(wind_speed) else None,
+                    'density_particles_cm3': float(wind_density) if pd.notna(wind_density) else None,
+                    'temperature_k': float(wind_temperature) if pd.notna(wind_temperature) else None,
+                    'bz_gsm_nt': float(bz_gsm) if pd.notna(bz_gsm) else None,
+                    'bt_nt': float(bt) if pd.notna(bt) else None
+                },
+                'cme_analysis': {
+                    'probability': float(cme_probability),
+                    'occurring': cme_occurring,
+                    'risk_level': risk_level,
+                    'threshold_used': float(threshold),
+                    'scores': {
+                        'velocity_score': float(velocity_score),
+                        'density_score': float(density_score),
+                        'temperature_score': float(temperature_score),
+                        'bz_score': float(bz_score)
+                    },
+                    'thresholds': {
+                        'velocity_threshold_km_s': velocity_threshold,
+                        'density_threshold_particles_cm3': density_threshold,
+                        'temperature_threshold_k': temperature_threshold,
+                        'bz_threshold_nt': bz_threshold
+                    }
+                }
+            }
+            
+        except Exception as noaa_error:
+            logger.error(f"Error fetching NOAA data: {noaa_error}")
+            return {
+                'success': False,
+                'error': f'Failed to fetch or process NOAA wind data: {str(noaa_error)}',
+                'satellite': {
+                    'norad_id': norad_id,
+                    'name': sat_data.get('name', f'Satellite {norad_id}'),
+                    'latitude': sat_lat,
+                    'longitude': sat_lon
+                }
+            }
+            
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error in satellite CME prediction: {e}")
+        raise HTTPException(status_code=500, detail=f"Error fetching satellite data: {str(e)}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in get_satellite_cme_prediction: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn
