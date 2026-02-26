@@ -51,10 +51,43 @@ Cme_detection_Phased/
 
 ## Setup Instructions
 
-1. Copy backend from original project
-2. Install dependencies
-3. Run backend: `cd backend && python main.py`
-4. Run frontend: `cd frontend && npm run dev`
+### Local Development
+
+1. **Backend Setup**
+```bash
+cd backend
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+python main.py
+```
+
+2. **Frontend Setup**
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+3. **Access Application**
+- Frontend: http://localhost:8080
+- Backend API: http://localhost:8002
+- API Documentation: http://localhost:8002/docs
+
+### Deploy to Render
+
+This project is ready for one-click deployment to Render!
+
+**Quick Deploy (5 minutes):**
+1. Push code to GitHub
+2. Connect repository to Render
+3. Use Blueprint deployment (auto-detects `render.yaml`)
+4. Update frontend `VITE_API_URL` with your backend URL
+
+**Detailed Instructions:**
+- 🚀 Quick Start: [QUICK_START.md](./QUICK_START.md)
+- 📖 Full Guide: [DEPLOYMENT.md](./DEPLOYMENT.md)
+- ✅ Checklist: [DEPLOYMENT_CHECKLIST.md](./DEPLOYMENT_CHECKLIST.md)
 
 ## Navigation
 - Phase selector in header

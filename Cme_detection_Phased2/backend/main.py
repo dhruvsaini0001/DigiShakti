@@ -6352,4 +6352,7 @@ async def get_satellite_cme_prediction(norad_id: int, threshold: float = 0.5):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8002)
+    # Use PORT environment variable for cloud deployment (Render, Heroku, etc.)
+    # Falls back to 8002 for local development
+    port = int(os.environ.get("PORT", 8002))
+    uvicorn.run(app, host="0.0.0.0", port=port)
