@@ -70,62 +70,61 @@ def get_real_plasma_data():
             # Handle potential JSON parsing issues with large responses
             import json
             try:
-                # Method 1: Use json.loads() instead of response.json() for better control
-                # This handles cases where response.json() might fail due to extra data
-                text = response.text.strip()
-                data = json.loads(text)
+                # Method 1: Try standard JSON parsing first
+                data = response.json()
             except (ValueError, json.JSONDecodeError) as json_err:
-                # Method 2: If that fails, try parsing from text with cleanup
-                logger.warning(f"⚠️ JSON parse error, trying to fix: {json_err}")
-                text = response.text.strip()
-                
-                # Remove any trailing whitespace or extra characters after the JSON
-                # Find the last complete ']' that closes the array
-                bracket_count = 0
-                last_valid_idx = -1
-                for i in range(len(text) - 1, -1, -1):
-                    if text[i] == ']':
-                        bracket_count += 1
-                    elif text[i] == '[':
-                        bracket_count -= 1
-                        if bracket_count == 0:
-                            last_valid_idx = i
-                            break
-                
-                if last_valid_idx != -1:
-                    # Extract valid JSON portion
-                    text = text[:last_valid_idx + 1]
-                    try:
-                        data = json.loads(text)
-                        logger.info("✅ Fixed JSON by extracting valid portion")
-                    except Exception as fix_err:
-                        logger.error(f"❌ Could not fix JSON: {fix_err}")
-                        return {'success': False, 'error': f'JSON parse error: {json_err}'}
-                else:
-                    # Fallback: try to find first '[' and last ']'
-                    start_idx = text.find('[')
-                    end_idx = text.rfind(']')
-                    if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
-                        text = text[start_idx:end_idx+1]
+                # Method 2: Parse line by line to handle malformed JSON
+                logger.warning(f"⚠️ JSON parse error, trying line-by-line parsing: {json_err}")
+                try:
+                    text = response.text.strip()
+                    # Split by newlines and parse each line as JSON array element
+                    lines = text.split('\n')
+                    data = []
+                    header_found = False
+                    
+                    for line in lines:
+                        line = line.strip()
+                        if not line or line == '[' or line == ']':
+                            continue
+                        # Remove trailing comma if present
+                        if line.endswith(','):
+                            line = line[:-1]
                         try:
-                            data = json.loads(text)
-                            logger.info("✅ Fixed JSON by extracting first/last brackets")
-                        except Exception as fix_err:
-                            logger.error(f"❌ Could not fix JSON: {fix_err}")
-                            return {'success': False, 'error': f'JSON parse error: {json_err}'}
+                            # Try to parse as JSON array
+                            parsed = json.loads(line)
+                            if isinstance(parsed, list):
+                                if not header_found:
+                                    # Skip header row
+                                    header_found = True
+                                    continue
+                                data.append(parsed)
+                        except:
+                            # Skip malformed lines
+                            continue
+                    
+                    if len(data) > 0:
+                        logger.info(f"✅ Fixed JSON by line-by-line parsing, got {len(data)} records")
                     else:
-                        logger.error(f"❌ Could not find valid JSON structure")
-                        return {'success': False, 'error': f'JSON parse error: {json_err}'}
+                        logger.error(f"❌ No valid data found after line-by-line parsing")
+                        return {'success': False, 'error': 'No valid data in response'}
+                        
+                except Exception as fix_err:
+                    logger.error(f"❌ Could not fix JSON with line-by-line parsing: {fix_err}")
+                    return {'success': False, 'error': f'JSON parse error: {json_err}'}
             
-            # Ensure data is a list
+            # Ensure data is a list and has records
             if not isinstance(data, list) or len(data) == 0:
-                logger.error(f"❌ Invalid data format: expected list, got {type(data)}")
-                return {'success': False, 'error': 'Invalid data format'}
+                logger.error(f"❌ Invalid data format: expected list with data, got {type(data)} with {len(data) if isinstance(data, list) else 0} records")
+                return {'success': False, 'error': 'Invalid data format or no data'}
             
-            data = data[1:]  # Skip header
+            # If data looks like it still has headers (first element is strings, not numbers)
+            if len(data) > 0 and isinstance(data[0], list) and len(data[0]) > 0:
+                # Check if first row looks like headers (string 'time_tag' instead of actual timestamp)
+                if isinstance(data[0][0], str) and 'time' in data[0][0].lower():
+                    data = data[1:]  # Skip header
             
             # No limit - use all data points
-            logger.info(f"📊 Processing {len(data)} data points (no limit)")
+            logger.info(f"📊 Processing {len(data)} plasma data points")
             
             df = pd.DataFrame(data, columns=[
                 'time_tag', 'density', 'speed', 'temperature'
