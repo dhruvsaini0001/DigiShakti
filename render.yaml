@@ -21,16 +21,14 @@ services:
     autoDeploy: true
 
   # Frontend Static Site
-  - type: web
+  - type: static
     name: digishakti-frontend
-    runtime: node
-    env: node
     region: oregon
     plan: free
     branch: main
     rootDir: Cme_detection_Phased2/frontend
     buildCommand: npm install && npm run build
-    staticPublishPath: ./dist
+    publishPath: ./dist
     envVars:
       - key: NODE_VERSION
         value: 18.17.0
