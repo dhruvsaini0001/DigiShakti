@@ -83,8 +83,15 @@ data/
 *.onnx
 *.pth
 *.pt
-backend/scripts/7_days_forecast/models/
-backend/scripts/7_days_forecast/scaler_*.pkl
+
+# EXCEPT - Allow forecast model files needed for deployment
+!backend/scripts/7_days_forecast/models/
+!backend/scripts/7_days_forecast/models/*.keras
+!backend/scripts/7_days_forecast/scaler.pkl
+
+# But still exclude these
+backend/scripts/7_days_forecast/scaler_backup.pkl
+backend/scripts/7_days_forecast/scaler_multioutput.pkl
 backend/scripts/7_days_forecast/train_*.py
 
 # OS
