@@ -892,7 +892,17 @@ async def get_recent_cme_events():
         logger.error(f"Failed to get recent CME events: {e}")
         import traceback
         logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(e))
+        # Return graceful error instead of raising exception
+        # This prevents "Failed to fetch" errors on frontend
+        return {
+            "events": [],
+            "total_count": 0,
+            "date_range": "September 1 - November 11, 2025",
+            "includes_predictions": False,
+            "next_update": (datetime.now() + timedelta(hours=6)).isoformat(),
+            "message": f"Service temporarily unavailable: {str(e)[:100]}",
+            "error": str(e)[:200]
+        }
 
 @app.get("/api/data/summary")
 async def get_data_summary():
